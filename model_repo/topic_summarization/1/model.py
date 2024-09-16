@@ -4,7 +4,6 @@ to ingest a list of documents & return their embeddings.
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
@@ -15,7 +14,6 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface.llms import HuggingFacePipeline
-from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 
@@ -30,7 +28,6 @@ class TritonPythonModel:
     refined_prompt: PromptTemplate
     prompt: PromptTemplate
     llm_cfg: dict
-    n_gpu_layers: int
     device: str
     hf_model_id: str
     tokenizer: AutoTokenizer
@@ -41,9 +38,6 @@ class TritonPythonModel:
         """Load model into memory and set some necessary model specific variables"""
 
         model_config = json.loads(args["model_config"])
-        model_path = os.path.join(
-            args["model_repository"], args["model_version"], "model_info"
-        )
 
         self.outputs = {
             output["name"]: pb_utils.triton_string_to_numpy(output["data_type"])
@@ -76,10 +70,19 @@ class TritonPythonModel:
 
         self.model_id = "amazon/MistralLite"
         self.llm_path = Path("./model_data/mistrallite")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.llm_path)
-        self.llm = AutoModelForCausalLM.from_pretrained(
-            self.llm_path, local_files_only=True
-        )
+
+        try:
+            self.char_splitter = CharacterTextSplitter(
+                separator="\n", chunk_size=1200, chunk_overlap=200
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(self.llm_path)
+            self.llm = AutoModelForCausalLM.from_pretrained(
+                self.llm_path, local_files_only=True
+            )
+        except ValueError:
+            self.model = None
+            self._log("Not instantiated due to missing file...")
+
         self.pipeline = pipeline(
             "text-generation",
             model=self.llm,
@@ -98,19 +101,10 @@ class TritonPythonModel:
             verbose=False,
             question_prompt=self.prompt,
             refine_prompt=self.refined_prompt,
-            return_intermediate_steps=True,
+            return_intermediate_steps=False,
             input_key="input_documents",
             output_key="output_text",
         )
-
-        try:
-            self.char_splitter = CharacterTextSplitter(
-                separator="\n", chunk_size=1200, chunk_overlap=200
-            )
-            self.model = SentenceTransformer.load(model_path).to(device=self.device)
-        except ValueError:
-            self.model = None
-            self._log("Not instantiated due to missing file...")
 
     def execute(self, requests):
         """
