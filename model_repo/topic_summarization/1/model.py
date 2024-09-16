@@ -10,11 +10,9 @@ from pathlib import Path
 from typing import Dict
 
 import numpy as np
-import torch
 import triton_python_backend_utils as pb_utils  # pylint: disable=import-error
 from langchain.chains.summarize import load_summarize_chain
 from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.llms import Ollama
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface.llms import HuggingFacePipeline
 from sentence_transformers import SentenceTransformer
@@ -53,8 +51,6 @@ class TritonPythonModel:
         }
         self.model_name = args["model_name"]
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
         self.prompt_template = """Summarize this content:
         {text}
         SUMMARY: 
@@ -78,11 +74,6 @@ class TritonPythonModel:
             "context_length": 6000,
         }
 
-        self.n_gpu_layers = -1  # flag for moving all layers to the GPU
-        self.model_path = Path(
-            "/home/triton/app/model_repo/topic_summarization/1/mistrallite.Q4_K_M.gguf"
-        )
-
         self.model_id = "amazon/MistralLite"
         self.llm_path = Path("./model_data/mistrallite")
         self.tokenizer = AutoTokenizer.from_pretrained(self.llm_path)
@@ -93,16 +84,12 @@ class TritonPythonModel:
             "text-generation",
             model=self.llm,
             tokenizer=self.tokenizer,
-            max_new_tokens=10,
+            max_new_tokens=1000,
             device=0,
         )
         self.gpu_pipe = HuggingFacePipeline(
             pipeline=self.pipeline,
-            pipeline_kwargs={
-                "max_new_tokens": 1500,
-                "temperature": 0.7,
-                "context_length": 6000,
-            },
+            pipeline_kwargs=self.llm_cfg,
         )
 
         self.chain = load_summarize_chain(
