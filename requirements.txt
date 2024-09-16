@@ -1,0 +1,10 @@
+pandas
+bertopic
+scikit-learn
+sentence_transformers
+hdbscan
+snorkel
+ctransformers[cuda]
+langchain
+langchain-community
+langchain_huggingface

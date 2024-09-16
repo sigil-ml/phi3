@@ -1,0 +1,29 @@
+services:
+
+  nitmre-volume:
+    image: summarization_triton:latest
+    # pull_policy: build
+    build:
+      context: ./
+      dockerfile: nlp-volume.dockerfile
+    container_name: nitmre-volume
+    volumes:
+      - /home/.cache/huggingface/hub/models--amazon--MistralLite/:/home/.cache/huggingface/hub/models--amazon--MistralLite/:rw
+      - ./model_repo:/home/triton/app/model_repo:r
+      - ./model_data:/home/triton/app/model_data:r
+      - ./.venv/lib/python3.8/site-packages:/home/triton/app/python-packages:r
+    # entrypoint: bash -c "rm -rf ./local_models && cp -nr /home/triton/app/model_repo ./local_models && cp -nr /home/triton/app/model_data/* ./local_models && tritonserver --model-repository=./local_models"
+    shm_size: 32GB
+    ulimits:
+      memlock: -1
+    ports:
+      - 8000:8000
+      - 8001:8001
+      - 8002:8002
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
